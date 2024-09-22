@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Dimensions } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-// import MapViewDirections from "react-native-maps-directions";
-import * as Location from "expo-location";
-import { MapViewRoute } from "react-native-maps-routes";
+import MapViewDirections from "react-native-maps-directions";
+import * as Location from "expo-location"; // Import Location from expo-location
+
 const { width, height } = Dimensions.get("window");
 const ASPECT_RATIO = width / height;
 const LATITUDE_DELTA = 0.0922;
@@ -12,24 +12,28 @@ const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 const GOOGLE_MAPS_APIKEY = "AIzaSyDbrZgv56l76sSmJPzO8wTweIMXRuEPszQ"; // Replace with your API key
 
 export default function App() {
-  const origin = { latitude: 37.33228, longitude: -122.01098 };
-  const destination = { latitude: 37.423199, longitude: -122.084068 };
+  const [origin, setOrigin] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const destination = { latitude: 10.8, longitude: 76.9918373 };
 
-  // useEffect(() => {
-  //   (async () => {
-  //     let { status } = await Location.requestForegroundPermissionsAsync();
-  //     if (status !== "granted") {
-  //       console.error("Permission to access location was denied");
-  //       return;
-  //     }
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.error("Permission to access location was denied");
+        return;
+      }
 
-  //     let location = await Location.getCurrentPositionAsync({});
-  //     setOrigin({
-  //       latitude: location.coords.latitude,
-  //       longitude: location.coords.longitude,
-  //     });
-  //   })();
-  // }, []);
+      let location = await Location.getCurrentPositionAsync({});
+      console.log(location);
+      setOrigin({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    })();
+  }, []);
 
   if (!origin) {
     return null; // You can show a loading spinner here
@@ -45,13 +49,16 @@ export default function App() {
           latitudeDelta: LATITUDE_DELTA,
           longitudeDelta: LONGITUDE_DELTA,
         }}
+        showsUserLocation={true} // Show user location on the map
       >
-        <Marker coordinate={origin} title="Origin" />
+        <Marker coordinate={origin} title="Current Location" />
         <Marker coordinate={destination} title="Destination" />
-        <MapViewRoute
+        <MapViewDirections
           origin={origin}
           destination={destination}
-          apiKey={GOOGLE_MAPS_APIKEY}
+          apikey={GOOGLE_MAPS_APIKEY}
+          strokeWidth={3}
+          strokeColor="hotpink"
         />
       </MapView>
     </View>
