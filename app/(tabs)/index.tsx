@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,80 +6,72 @@ import {
   FlatList,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Button } from "react-native-paper";
 import axios from "axios";
 import { router } from "expo-router";
-
-function extractPatientID(query: string) {
-  // Define the regular expression to match "Patient ID:" followed by the ID
-  const regex = /Patient ID:\s*(\d+)/i;
-
-  // Execute the regex on the input query
-  const match = regex.exec(query);
-
-  // Check if a match was found and return the patient ID
-  if (match && match[1]) {
-    return match[1];
-  } else {
-    return null; // Return null if no match is found
-  }
-}
+import HTMLView from "react-native-htmlview";
+import * as Location from "expo-location";
 
 const SmartAssistantScreen = () => {
-  const [messages, setMessages] = useState<{ sender: string; text: string }[]>(
-    []
-  );
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [origin, setOrigin] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.error("Permission to access location was denied");
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      setOrigin({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    })();
+  }, []);
 
   const handleSend = async () => {
-    if (input.trim() === "") return;
+    if (input.trim() === "" || !origin) return;
 
     const userMessage = { sender: "user", text: input };
-    setMessages([...messages, userMessage]);
-
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
     setInput("");
+    setLoading(true);
 
     try {
-      if (!input.includes("Patient ID:")) {
-        const response = await axios.post(
-          "https://medisynth-backend.onrender.com/patients/ask_general",
-          {
-            query: input,
-          }
-        );
-        const botMessage = { sender: "bot", text: response.data.answer };
-        setMessages((prevMessages) => [...prevMessages, botMessage]);
-      } else {
-        const extractingID = await extractPatientID(input);
-        if (extractingID) {
-          axios
-            .post(
-              `https://medisynth-backend.onrender.com/patients/ask_patient_specific/${extractingID}`,
-              {
-                query: input,
-              }
-            )
-            .then((response) => {
-              const botMessage = { sender: "bot", text: response.data.answer };
-              setMessages((prevMessages) => [...prevMessages, botMessage]);
-            })
-            .catch((error) => {
-              const botMessage = {
-                sender: "bot",
-                text: "Sorry, something went wrong.",
-              };
-              setMessages((prevMessages) => [...prevMessages, botMessage]);
-            });
+      const response = await axios.post(
+        `https://spd-backend-jdg9.onrender.com/maps`,
+        {
+          command: input,
+          currentLocation: origin, // Use the origin state for current location
         }
-      }
+      );
+
+      const botMessage = {
+        sender: "bot",
+        text: response?.data.answer,
+        from: response?.data.from,
+        to: response?.data.coordinates,
+        directions: response?.data.directions,
+      };
+      setMessages((prevMessages) => [...prevMessages, botMessage]);
     } catch (error) {
       const botMessage = {
         sender: "bot",
         text: "Sorry, something went wrong.",
       };
       setMessages((prevMessages) => [...prevMessages, botMessage]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -91,11 +83,48 @@ const SmartAssistantScreen = () => {
       ]}
     >
       <Text>{item.text}</Text>
+      {item.sender === "bot" && (
+        <View>
+          <Text>
+            From: {item.from?.latitude}, {item.from?.longitude}
+          </Text>
+          <Text>To: {JSON.stringify(item.to)}</Text>
+
+          {item.directions && item.directions.length > 0 && (
+            <View>
+              <Text style={styles.directionsHeader}>Directions:</Text>
+              {item.directions.map((direction: any, index: number) => (
+                <HTMLView
+                  key={index}
+                  value={`<p>• ${direction.instructions} (${direction.distance}, ${direction.duration})</p>`}
+                  stylesheet={styles}
+                />
+              ))}
+            </View>
+          )}
+
+          <Button
+            mode="contained"
+            onPress={() => {
+              router.push({
+                pathname: "/Maps",
+                params: {
+                  from_location: [item.from?.latitude, item.from?.longitude],
+                  to_location: [item.to?.latitude, item.to?.longitude],
+                },
+              });
+            }}
+          >
+            View on Maps
+          </Button>
+        </View>
+      )}
     </View>
   );
 
   return (
     <KeyboardAvoidingView style={styles.container}>
+      {loading && <ActivityIndicator size="large" color="#0000ff" />}
       <FlatList
         data={messages}
         renderItem={renderItem}
@@ -103,14 +132,6 @@ const SmartAssistantScreen = () => {
         contentContainerStyle={styles.chatContainer}
         style={styles.chatList}
       />
-      <Button
-        onPress={() => {
-          router.push("/Maps");
-        }}
-        mode="outlined"
-      >
-        Maps
-      </Button>
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.textInput}
@@ -150,8 +171,12 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     backgroundColor: "#EAEAEA",
   },
-  messageText: {
-    fontSize: 16,
+  directionsHeader: {
+    fontWeight: "bold",
+    marginTop: 10,
+  },
+  p: {
+    marginVertical: 4,
   },
   inputContainer: {
     flexDirection: "row",
@@ -159,7 +184,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "#ccc",
     alignItems: "center",
-    marginBottom: 20,
   },
   textInput: {
     flex: 1,

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Dimensions } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
-import * as Location from "expo-location"; // Import Location from expo-location
+import * as Location from "expo-location";
+import { useGlobalSearchParams } from "expo-router";
 
 const { width, height } = Dimensions.get("window");
 const ASPECT_RATIO = width / height;
@@ -12,28 +13,30 @@ const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 const GOOGLE_MAPS_APIKEY = "AIzaSyDbrZgv56l76sSmJPzO8wTweIMXRuEPszQ"; // Replace with your API key
 
 export default function App() {
-  const [origin, setOrigin] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-  const destination = { latitude: 10.8, longitude: 76.9918373 };
+  const { from_location, to_location } = useGlobalSearchParams(); // Extract parameters
 
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.error("Permission to access location was denied");
-        return;
-      }
+  // Parse the coordinates
+  const parsedFromLocation =
+    typeof from_location === "string"
+      ? from_location.split(",").map(Number)
+      : [0, 0];
 
-      let location = await Location.getCurrentPositionAsync({});
-      console.log(location);
-      setOrigin({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-    })();
-  }, []);
+  const parsedToLocation =
+    typeof to_location === "string"
+      ? to_location.split(",").map(Number)
+      : [0, 0];
+
+  const destination = {
+    latitude: parsedToLocation[0],
+    longitude: parsedToLocation[1],
+  };
+
+  console.log("From Location: ", parsedFromLocation);
+  console.log("To Location: ", parsedToLocation);
+  const origin = {
+    latitude: parsedFromLocation[0],
+    longitude: parsedFromLocation[1],
+  };
 
   if (!origin) {
     return null; // You can show a loading spinner here
@@ -49,9 +52,16 @@ export default function App() {
           latitudeDelta: LATITUDE_DELTA,
           longitudeDelta: LONGITUDE_DELTA,
         }}
-        showsUserLocation={true} // Show user location on the map
+        showsUserLocation={true}
       >
         <Marker coordinate={origin} title="Current Location" />
+        <Marker
+          coordinate={{
+            latitude: parsedFromLocation[0],
+            longitude: parsedFromLocation[1],
+          }}
+          title="From Location"
+        />
         <Marker coordinate={destination} title="Destination" />
         <MapViewDirections
           origin={origin}
