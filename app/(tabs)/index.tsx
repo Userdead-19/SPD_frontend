@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,20 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { Button, IconButton } from "react-native-paper";
+import { Button, IconButton, useTheme, Appbar } from "react-native-paper";
 import axios from "axios";
 import { router } from "expo-router";
 import HTMLView from "react-native-htmlview";
 import * as Location from "expo-location";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SmartAssistantScreen = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false); // For general loading
-  const [transcribing, setTranscribing] = useState(false); // For transcription-specific loading
+  const [loading, setLoading] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [origin, setOrigin] = useState<{
     latitude: number;
     longitude: number;
@@ -29,6 +30,10 @@ const SmartAssistantScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isDarkTheme, setIsDarkTheme] = useState(false); // State to manage theme
+  const FlatListref = useRef<FlatList<any>>(null);
+
+  const { colors } = useTheme(); // Hook for theme colors
 
   useEffect(() => {
     (async () => {
@@ -43,10 +48,75 @@ const SmartAssistantScreen = () => {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       });
+
+      // Load stored messages from AsyncStorage
+      const storedMessages = await AsyncStorage.getItem("chatHistory");
+      console.log("Stored messages:", storedMessages);
+      if (storedMessages) {
+        setMessages(JSON.parse(storedMessages));
+      }
+      FlatListref.current?.scrollToEnd({ animated: true });
     })();
   }, []);
 
-  // Function to start recording
+  const saveMessagesToStorage = async (newMessages: any[]) => {
+    try {
+      await AsyncStorage.setItem("chatHistory", JSON.stringify(newMessages));
+    } catch (error) {
+      console.error("Error saving messages to storage:", error);
+    }
+  };
+
+  const handleSend = async () => {
+    if (input.trim() === "" || !origin) return;
+
+    const userMessage = { sender: "user", text: input };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    // Save user message to storage
+    saveMessagesToStorage(newMessages);
+
+    try {
+      const response = await axios.post(
+        `https://spd-backend-jdg9.onrender.com/maps`,
+        {
+          command: input,
+          currentLocation: origin,
+        }
+      );
+
+      const botMessage = {
+        sender: "bot",
+        text: response?.data.answer,
+        from: response?.data.from,
+        to: response?.data.to,
+        locationData: response?.data.location_data,
+        directions: response?.data.directions,
+      };
+
+      const updatedMessages = [...newMessages, botMessage];
+      setMessages(updatedMessages);
+
+      // Save bot response to storage
+      saveMessagesToStorage(updatedMessages);
+    } catch (error) {
+      const botMessage = {
+        sender: "bot",
+        text: "Sorry, something went wrong.",
+      };
+      const updatedMessages = [...newMessages, botMessage];
+      setMessages(updatedMessages);
+
+      // Save error response to storage
+      saveMessagesToStorage(updatedMessages);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   async function startRecording() {
     try {
       await Audio.requestPermissionsAsync();
@@ -103,41 +173,9 @@ const SmartAssistantScreen = () => {
     setRecording(null);
   }
 
-  const handleSend = async () => {
-    if (input.trim() === "" || !origin) return;
-
-    const userMessage = { sender: "user", text: input };
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
-    setInput("");
-    setLoading(true); // Start general loading
-
-    try {
-      const response = await axios.post(
-        `https://spd-backend-jdg9.onrender.com/maps`,
-        {
-          command: input,
-          currentLocation: origin, // Use the origin state for current location
-        }
-      );
-
-      const botMessage = {
-        sender: "bot",
-        text: response?.data.answer,
-        from: response?.data.from,
-        to: response?.data.coordinates,
-        directions: response?.data.directions,
-      };
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
-    } catch (error) {
-      const botMessage = {
-        sender: "bot",
-        text: "Sorry, something went wrong.",
-      };
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
-    } finally {
-      setLoading(false); // Stop general loading
-    }
-  };
+  useEffect(() => {
+    FlatListref.current?.scrollToEnd({ animated: true });
+  }, [messages]);
 
   const renderItem = ({ item }: { item: any }) => (
     <View
@@ -154,6 +192,21 @@ const SmartAssistantScreen = () => {
           </Text>
           <Text>To: {JSON.stringify(item.to)}</Text>
 
+          {/* Show location details if available */}
+          {item.locationData && (
+            <View>
+              <Text>Location Info:</Text>
+              <Text>Block: {item.locationData?.location.block_name}</Text>
+              <Text>
+                Department: {item.locationData?.location.department_name}
+              </Text>
+              <Text>Floor: {item.locationData?.location.floor}</Text>
+              <Text>Landmark: {item.locationData?.location.landmark}</Text>
+              <Text>Room No: {item.locationData?.location.room_no}</Text>
+            </View>
+          )}
+
+          {/* Display directions if available */}
           {item.directions && item.directions.length > 0 && (
             <View>
               <Text style={styles.directionsHeader}>Directions:</Text>
@@ -174,7 +227,10 @@ const SmartAssistantScreen = () => {
                 pathname: "/Maps",
                 params: {
                   from_location: [item.from?.latitude, item.from?.longitude],
-                  to_location: [item.to?.latitude, item.to?.longitude],
+                  to_location: [
+                    item.locationData?.coordinates.latitude,
+                    item.locationData?.coordinates.longitude,
+                  ],
                 },
               });
             }}
@@ -186,53 +242,99 @@ const SmartAssistantScreen = () => {
     </View>
   );
 
-  return (
-    <KeyboardAvoidingView style={styles.container}>
-      {(loading || transcribing) && ( // Show ActivityIndicator during loading or transcribing
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0000ff" />
-        </View>
-      )}
-      <FlatList
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
-        contentContainerStyle={styles.chatContainer}
-        style={styles.chatList}
-      />
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Type a message"
-        />
-        <IconButton
-          icon="microphone"
-          size={24}
-          onPress={() => setModalVisible(true)}
-        />
-        <Button onPress={handleSend}>Send</Button>
-      </View>
+  // Function to toggle theme
+  const toggleTheme = () => {
+    setIsDarkTheme(!isDarkTheme);
+  };
 
-      {/* Modal for recording audio */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+  return (
+    <>
+      <Appbar.Header
+        style={{ backgroundColor: isDarkTheme ? "#212121" : "#FFFFFF" }}
       >
-        <View style={styles.modalView}>
-          <Text>{isRecording ? "Recording..." : "Tap to start recording"}</Text>
-          <Button
-            onPress={isRecording ? stopRecordingAndTranscribe : startRecording}
-          >
-            {isRecording ? "Stop Recording" : "Start Recording"}
+        <Appbar.Content
+          title="Smart Assistant"
+          color={isDarkTheme ? "#ffffff" : "#212121"}
+        />
+
+        {/* Theme Toggle Button */}
+        <Appbar.Action
+          icon={isDarkTheme ? "brightness-7" : "brightness-2"}
+          onPress={toggleTheme}
+        />
+        <Appbar.Action icon="map" onPress={() => router.push("/Maps")} />
+        <Appbar.Action
+          icon="history"
+          onPress={() => router.push("/HistoryScreen")}
+        />
+      </Appbar.Header>
+
+      <KeyboardAvoidingView
+        style={[
+          styles.container,
+          { backgroundColor: isDarkTheme ? "#333" : "#fff" },
+        ]} // Dynamic background based on theme
+      >
+        {(loading || transcribing) && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0000ff" />
+          </View>
+        )}
+        <FlatList
+          data={messages}
+          ref={FlatListref}
+          renderItem={renderItem}
+          keyExtractor={(_, index) => index.toString()}
+          contentContainerStyle={styles.messageList}
+          onContentSizeChange={() =>
+            FlatListref.current?.scrollToEnd({ animated: true })
+          }
+        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: isDarkTheme ? "#444" : "#f0f0f0",
+                color: isDarkTheme ? "#fff" : "#000",
+              },
+            ]}
+            placeholder="Type your message"
+            placeholderTextColor={isDarkTheme ? "#aaa" : "#555"}
+            value={input}
+            onChangeText={(text) => setInput(text)}
+          />
+          <Button mode="contained" onPress={handleSend}>
+            Send
           </Button>
-          <Button onPress={() => setModalVisible(false)}>Cancel</Button>
+          <IconButton
+            icon="microphone"
+            iconColor={isDarkTheme ? "white" : "black"}
+            onPress={() => setModalVisible(true)}
+          />
         </View>
-      </Modal>
-    </KeyboardAvoidingView>
+
+        <Modal visible={modalVisible} animationType="slide">
+          <View style={styles.modalContainer}>
+            {isRecording ? (
+              <IconButton
+                icon="stop"
+                onPress={stopRecordingAndTranscribe}
+                size={60}
+              />
+            ) : (
+              <IconButton
+                icon="microphone"
+                onPress={startRecording}
+                size={60}
+                iconColor={isDarkTheme ? "#ffffff" : "#000"}
+              />
+            )}
+            <Button onPress={() => setModalVisible(false)}>Close</Button>
+          </View>
+        </Modal>
+      </KeyboardAvoidingView>
+    </>
   );
 };
 
@@ -241,64 +343,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingContainer: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    zIndex: 10,
-    transform: [{ translateX: -25 }, { translateY: -25 }],
-  },
-  chatContainer: {
-    flexGrow: 1,
-    justifyContent: "flex-end",
-    padding: 10,
-  },
-  chatList: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    zIndex: 1,
+    top: "40%",
+    left: "50%",
+  },
+  messageList: {
+    paddingVertical: 20,
   },
   messageContainer: {
     padding: 10,
-    borderRadius: 5,
-    marginBottom: 10,
-    maxWidth: "80%",
+    borderRadius: 10,
+    margin: 5,
   },
   userMessage: {
     alignSelf: "flex-end",
-    backgroundColor: "#DCF8C6",
+    backgroundColor: "#cce5ff",
   },
   botMessage: {
     alignSelf: "flex-start",
-    backgroundColor: "#EAEAEA",
+    backgroundColor: "#f0f0f0",
   },
   directionsHeader: {
     fontWeight: "bold",
-    marginTop: 10,
+    paddingVertical: 5,
   },
   inputContainer: {
     flexDirection: "row",
+    alignItems: "center",
     padding: 10,
-    borderTopWidth: 1,
-    borderColor: "#ccc",
-    alignItems: "center",
+    gap: 2,
   },
-  textInput: {
+  input: {
     flex: 1,
+    minWidth: "55%",
     height: 40,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 5,
     paddingHorizontal: 10,
-    marginRight: 10,
+    borderRadius: 5,
   },
-  modalView: {
-    marginTop: "auto",
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 10,
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
 });
 
