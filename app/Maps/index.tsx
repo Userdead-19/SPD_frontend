@@ -31,8 +31,6 @@ export default function App() {
     longitude: parsedToLocation[1],
   };
 
-  console.log("From Location: ", parsedFromLocation);
-  console.log("To Location: ", parsedToLocation);
   const origin = {
     latitude: parsedFromLocation[0],
     longitude: parsedFromLocation[1],
