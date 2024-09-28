@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
+import * as Speech from 'expo-speech';
 import { Button, IconButton, useTheme, Appbar } from "react-native-paper";
 import axios from "axios";
 import { router } from "expo-router";
@@ -17,7 +18,6 @@ import * as Location from "expo-location";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 const SmartAssistantScreen = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -30,10 +30,10 @@ const SmartAssistantScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isDarkTheme, setIsDarkTheme] = useState(false); // State to manage theme
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
   const FlatListref = useRef<FlatList<any>>(null);
-
-  const { colors } = useTheme(); // Hook for theme colors
+  const [isSpeaking, setIsSpeaking] = useState(false); // New state for tracking speech
+  const { colors } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -139,10 +139,10 @@ const SmartAssistantScreen = () => {
     setModalVisible(false);
 
     if (uri) {
-      setTranscribing(true); // Set transcribing to true before starting the transcription process
+      setTranscribing(true);
       try {
         const response = await FileSystem.uploadAsync(
-          "https://spd-backend-jdg9.onrender.com/transcribe", // Replace with your backend URL
+          "https://spd-backend-jdg9.onrender.com/transcribe",
           uri,
           {
             fieldName: "file",
@@ -156,14 +156,14 @@ const SmartAssistantScreen = () => {
 
         const responseData = JSON.parse(response.body);
         if (responseData.text) {
-          setInput(responseData.text); // Set transcription to input field for modification
+          setInput(responseData.text);
         } else {
           console.error("Transcription not found in response");
         }
       } catch (error) {
         console.error("Error uploading audio:", error);
       } finally {
-        setTranscribing(false); // Ensure transcribing is set to false after completion
+        setTranscribing(false);
       }
     } else {
       console.error("File URI is null or undefined");
@@ -187,25 +187,27 @@ const SmartAssistantScreen = () => {
       <Text>{item.text}</Text>
       {item.sender === "bot" && (
         <View>
-          <Text>
-            From: {item.from?.latitude}, {item.from?.longitude}
-          </Text>
-          <Text>To: {JSON.stringify(item.to)}</Text>
-
-          {/* Show location details if available */}
-          {item.locationData && (
-            <View>
-              <Text>Location Info:</Text>
-              <Text>Block: {item.locationData?.location.block_name}</Text>
-              <Text>
-                Department: {item.locationData?.location.department_name}
-              </Text>
-              <Text>Floor: {item.locationData?.location.floor}</Text>
-              <Text>Landmark: {item.locationData?.location.landmark}</Text>
-              <Text>Room No: {item.locationData?.location.room_no}</Text>
-            </View>
-          )}
-
+          <View style={styles.infoBox}>
+            <Text>
+              From: {item.from?.latitude}, {item.from?.longitude}
+            </Text>
+            <Text>To: {JSON.stringify(item.to)}</Text>
+  
+            {/* Show location details if available */}
+            {item.locationData && (
+              <View>
+                <Text>Location Info:</Text>
+                <Text>Block: {item.locationData?.location.block_name}</Text>
+                <Text>
+                  Department: {item.locationData?.location.department_name}
+                </Text>
+                <Text>Floor: {item.locationData?.location.floor}</Text>
+                <Text>Landmark: {item.locationData?.location.landmark}</Text>
+                <Text>Room No: {item.locationData?.location.room_no}</Text>
+              </View>
+            )}
+          </View>
+  
           {/* Display directions if available */}
           {item.directions && item.directions.length > 0 && (
             <View>
@@ -219,28 +221,76 @@ const SmartAssistantScreen = () => {
               ))}
             </View>
           )}
+          <View style={styles.buttonContainer}>
+  <Button
+    mode="contained"
+    style={styles.viewOnMapsButton}
+    onPress={() => {
+      router.push({
+        pathname: "/Maps",
+        params: {
+          from_location: [item.from?.latitude, item.from?.longitude],
+          to_location: [
+            item.locationData?.coordinates.latitude,
+            item.locationData?.coordinates.longitude,
+          ],
+        },
+      });
+    }}
+  >
+    View on Map
+  </Button>
+  
+  <Button
+    mode="contained"
+    style={styles.readOutButton}
+    onPress={() => handleReadOut(item)}
+  >
+    {isSpeaking ? "Stop" : "Read Out"}
+  </Button>
+</View>
 
-          <Button
-            mode="contained"
-            onPress={() => {
-              router.push({
-                pathname: "/Maps",
-                params: {
-                  from_location: [item.from?.latitude, item.from?.longitude],
-                  to_location: [
-                    item.locationData?.coordinates.latitude,
-                    item.locationData?.coordinates.longitude,
-                  ],
-                },
-              });
-            }}
-          >
-            View on Maps
-          </Button>
         </View>
       )}
     </View>
   );
+  const handleReadOut = (item: any) => {
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    } else {
+      let textToRead = item.text;
+  
+      if (item.locationData) {
+        textToRead += `
+          Location Info:
+          Block: ${item.locationData.location.block_name},
+          Department: ${item.locationData.location.department_name},
+          Floor: ${item.locationData.location.floor},
+          Landmark: ${item.locationData.location.landmark},
+          Room No: ${item.locationData.location.room_no}.
+        `;
+      }
+  
+      if (item.directions && item.directions.length > 0) {
+        const directionsText = item.directions
+          .map(
+            (direction: any) =>
+              `• ${direction.instructions} (${direction.distance}, ${direction.duration})`
+          )
+          .join("\n");
+        textToRead += `Directions:\n${directionsText}`;
+      }
+  
+      Speech.speak(textToRead, {
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+      });
+      setIsSpeaking(true);
+    }
+  };
+  
+    
 
   // Function to toggle theme
   const toggleTheme = () => {
@@ -270,10 +320,7 @@ const SmartAssistantScreen = () => {
       </Appbar.Header>
 
       <KeyboardAvoidingView
-        style={[
-          styles.container,
-          { backgroundColor: isDarkTheme ? "#333" : "#fff" },
-        ]} // Dynamic background based on theme
+        style={[styles.container, { backgroundColor: isDarkTheme ? "#333" : "#fff" }]}
       >
         {(loading || transcribing) && (
           <View style={styles.loadingContainer}>
@@ -297,39 +344,32 @@ const SmartAssistantScreen = () => {
               {
                 backgroundColor: isDarkTheme ? "#444" : "#f0f0f0",
                 color: isDarkTheme ? "#fff" : "#000",
+                padding:7,
+                paddingLeft:14,
               },
             ]}
-            placeholder="Type your message"
-            placeholderTextColor={isDarkTheme ? "#aaa" : "#555"}
+            placeholder="Type a message..."
+            placeholderTextColor={isDarkTheme ? "#aaa" : "#888"}
             value={input}
-            onChangeText={(text) => setInput(text)}
+            onChangeText={setInput}
+            onSubmitEditing={handleSend}
           />
-          <Button mode="contained" onPress={handleSend}>
+          <Button mode="contained" onPress={handleSend} style={styles.sendButton}>
             Send
           </Button>
           <IconButton
-            icon="microphone"
-            iconColor={isDarkTheme ? "white" : "black"}
-            onPress={() => setModalVisible(true)}
+            icon={isRecording ? "stop" : "microphone"}
+            onPress={() => {
+              isRecording ? stopRecordingAndTranscribe() : startRecording();
+            }}
           />
         </View>
 
+        {/* Modal for Audio Transcription */}
         <Modal visible={modalVisible} animationType="slide">
           <View style={styles.modalContainer}>
-            {isRecording ? (
-              <IconButton
-                icon="stop"
-                onPress={stopRecordingAndTranscribe}
-                size={60}
-              />
-            ) : (
-              <IconButton
-                icon="microphone"
-                onPress={startRecording}
-                size={60}
-                iconColor={isDarkTheme ? "#ffffff" : "#000"}
-              />
-            )}
+            <Text style={styles.modalTitle}>Transcribing Audio...</Text>
+            <ActivityIndicator size="large" color="#0000ff" />
             <Button onPress={() => setModalVisible(false)}>Close</Button>
           </View>
         </Modal>
@@ -341,54 +381,133 @@ const SmartAssistantScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 10,
   },
   loadingContainer: {
-    flex: 1,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    position: "absolute",
-    zIndex: 1,
-    top: "40%",
-    left: "50%",
-  },
-  messageList: {
-    paddingVertical: 20,
-  },
-  messageContainer: {
-    padding: 10,
-    borderRadius: 10,
-    margin: 5,
-  },
-  userMessage: {
-    alignSelf: "flex-end",
-    backgroundColor: "#cce5ff",
-  },
-  botMessage: {
-    alignSelf: "flex-start",
-    backgroundColor: "#f0f0f0",
-  },
-  directionsHeader: {
-    fontWeight: "bold",
-    paddingVertical: 5,
+    backgroundColor: "#ffffff80",
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    gap: 2,
+    padding:7,
   },
   input: {
     flex: 1,
-    minWidth: "55%",
-    height: 40,
-    paddingHorizontal: 10,
-    borderRadius: 5,
+    marginRight: 10,
+    padding: 10,
+    borderRadius: 20,
+
   },
   modalContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  readOutButton: {
+    marginTop: 10,
+    backgroundColor: "#51158c",
+    flex:1,
+  },  
+  modalTitle: {
+    fontSize: 20,
+    marginBottom: 20,
+  },
+  messageList: {
+    paddingBottom: 80, // Space for input area
+  },
+  messageContainer: {
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#d3d3d3",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  
+  userMessage: {
+    backgroundColor: "#F7F4FF",
+    marginLeft:20,
+    marginRight:2,
+    fontWeight: '900',
+  },
+  
+  botMessage: {
+    backgroundColor: "#FFFFFF",
+    marginRight:16,
+  },
+  
+  infoBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 5,
+  },
+  
+  directionsHeader: {
+    fontWeight: "bold",
+    marginTop: 10,
+    color: "#51158c",
+  },
+  
+  viewOnMapsButton: {
+    flex:1,
+    marginTop: 10,
+    backgroundColor: "#51158c",
+    marginRight: 5,
+  },
+  
+  locationDetails: {
+    marginTop: 10,
+  },
+  
+  infoText: {
+    fontSize: 14,
+    color: "#555555",
+    marginBottom: 3,
+  },
+  
+  locationHeader: {
+    fontWeight: "bold",
+    marginBottom: 5,
+    color: "#51158c",
+  },
+  
+  mapButton: {
+    marginTop: 10,
+    backgroundColor: "#51158c",
+  },
+  sendButton:{
+    backgroundColor: "#51158c",
+  },
+  mapButtonText: {
+    color: "#ffffff",
+    fontWeight: "bold",
+  },
+  
+  locationData: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 5,
+  },
+  buttonContainer: {
+    flexDirection: "row", // Align buttons side by side
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  
 });
 
 export default SmartAssistantScreen;

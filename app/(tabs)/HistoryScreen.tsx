@@ -69,7 +69,7 @@ const ChatHistoryScreen = () => {
               <Ionicons
                 name={expandedIndex === index ? "chevron-up" : "chevron-down"}
                 size={24}
-                color="#1E90FF"
+                color="#51158c"
               />
             </TouchableOpacity>
           )}
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   locationHeader: {
     fontWeight: "bold",
     marginBottom: 5,
-    color: "#1E90FF",
+    color: "#51158c",
   },
   infoText: {
     fontSize: 14,
@@ -253,11 +253,11 @@ const styles = StyleSheet.create({
   directionsHeader: {
     fontWeight: "bold",
     marginTop: 10,
-    color: "#1E90FF",
+    color: "#51158c",
   },
   mapButton: {
     marginTop: 10,
-    backgroundColor: "#1E90FF",
+    backgroundColor: "#51158c",
   },
   mapButtonText: {
     color: "#FFF",
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   clearButtonText: {
-    color: "#1E90FF",
+    color: "#51158c",
     fontWeight: "bold",
   },
   locationData: {
