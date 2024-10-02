@@ -161,13 +161,13 @@ export default function MapScreen() {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
         },
-        heading: heading, // Update heading with the new direction
+        // Update heading with the new direction
         pitch: 90, // Adjust pitch for better 3D view
         altitude: 300,
         zoom: 20,
       });
     }
-  }, [heading, currentLocation]);
+  }, [currentLocation]);
 
   // Utility: Decode polyline from Google API
   const decodePolyline = (encoded: string) => {
