@@ -34,6 +34,7 @@ const SmartAssistantScreen = () => {
   const FlatListref = useRef<FlatList<any>>(null);
   const [isSpeaking, setIsSpeaking] = useState(false); // New state for tracking speech
   const { colors } = useTheme();
+  const styles = createStyles(isDarkTheme);
 
   useEffect(() => {
     (async () => {
@@ -181,10 +182,10 @@ const SmartAssistantScreen = () => {
     <View
       style={[
         styles.messageContainer,
-        item.sender === "user" ? styles.userMessage : styles.botMessage,
+        item.sender === "user" ? { ...styles.userMessage, backgroundColor: isDarkTheme ? "#444" : "#F7F4FF" } : styles.botMessage,
       ]}
     >
-      <Text>{item.text}</Text>
+      <Text style={{ color: isDarkTheme ? "#fff" : "#000" }}>{item.text}</Text>
       {item.sender === "bot" && (
         <View>
           <View style={styles.infoBox}>
@@ -343,7 +344,6 @@ const SmartAssistantScreen = () => {
               styles.input,
               {
                 backgroundColor: isDarkTheme ? "#444" : "#f0f0f0",
-                color: isDarkTheme ? "#fff" : "#000",
                 padding:7,
                 paddingLeft:14,
               },
@@ -377,8 +377,7 @@ const SmartAssistantScreen = () => {
     </>
   );
 };
-
-const styles = StyleSheet.create({
+const createStyles = (isDarkTheme: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     padding: 10,
@@ -437,10 +436,10 @@ const styles = StyleSheet.create({
   },
   
   userMessage: {
-    backgroundColor: "#F7F4FF",
-    marginLeft:20,
-    marginRight:2,
+    marginLeft: 20,
+    marginRight: 2,
     fontWeight: '900',
+    color: isDarkTheme ? "#FFFFFF" : "#000000",
   },
   
   botMessage: {
