@@ -18,6 +18,9 @@ import * as Location from "expo-location";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "expo-router";
+
+
 const SmartAssistantScreen = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -36,29 +39,44 @@ const SmartAssistantScreen = () => {
   const { colors } = useTheme();
   const styles = createStyles(isDarkTheme);
 
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.error("Permission to access location was denied");
-        return;
-      }
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchLocationAndMessages = async () => {
+        try {
+          // Request location permissions
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            console.error("Permission to access location was denied");
+            return;
+          }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setOrigin({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+          // Get the current location
+          let location = await Location.getCurrentPositionAsync({});
+          setOrigin({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
 
-      // Load stored messages from AsyncStorage
-      const storedMessages = await AsyncStorage.getItem("chatHistory");
+          // Load stored messages from AsyncStorage
+          const storedMessages = await AsyncStorage.getItem("chatHistory");
+          if (storedMessages) {
+            setMessages(JSON.parse(storedMessages));
+          }
 
-      if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
-      }
-      FlatListref.current?.scrollToEnd({ animated: true });
-    })();
-  }, []);
+          // Scroll the FlatList to the end
+          FlatListref.current?.scrollToEnd({ animated: true });
+        } catch (error) {
+          console.error("Error fetching location or messages:", error);
+        }
+      };
+
+      // Call the function when the component is focused
+      fetchLocationAndMessages();
+
+      // Cleanup function (optional, in case you need to cancel any async tasks)
+      return () => {};
+    }, []) // The dependency array is empty, so this effect will run on focus every time
+  );
 
   const saveMessagesToStorage = async (newMessages: any[]) => {
     try {
@@ -131,6 +149,7 @@ const SmartAssistantScreen = () => {
       console.error("Failed to start recording", err);
     }
   }
+  
 
   // Function to stop recording and transcribe audio
   async function stopRecordingAndTranscribe() {

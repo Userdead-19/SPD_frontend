@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  View,
-  Dimensions,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { StyleSheet, View, Dimensions, ActivityIndicator, Alert, Button } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import { useGlobalSearchParams } from "expo-router";
-import { useNavigation } from "expo-router";
 
 const { width, height } = Dimensions.get("window");
 const ASPECT_RATIO = width / height;
@@ -33,7 +26,6 @@ export default function MapScreen() {
   const [heading, setHeading] = useState<number>(0);
 
   const { from_location, to_location } = useGlobalSearchParams();
-  const navigation = useNavigation();
 
   const parsedFromLocation =
     typeof from_location === "string"
@@ -57,26 +49,20 @@ export default function MapScreen() {
         // Request location permission
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert(
-            "Permission Denied",
-            "Permission to access location was denied"
-          );
+          Alert.alert("Permission Denied", "Permission to access location was denied");
           setLoading(false);
           return;
         }
 
         // Get current location with a timeout
-        let location = (await Promise.race([
+        let location = await Promise.race([
           Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
           }),
           new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Location request timed out")),
-              10000
-            )
+            setTimeout(() => reject(new Error("Location request timed out")), 10000)
           ),
-        ])) as Location.LocationObject;
+        ]) as Location.LocationObject;
 
         if (location) {
           setCurrentLocation({
@@ -86,20 +72,15 @@ export default function MapScreen() {
         }
 
         // Watch heading changes to update camera angle
-        const headingWatcher = await Location.watchHeadingAsync(
-          (headingData) => {
-            setHeading(headingData.trueHeading); // Set heading to true heading
-          }
-        );
+        const headingWatcher = await Location.watchHeadingAsync((headingData) => {
+          setHeading(headingData.trueHeading); // Set heading to true heading
+        });
 
         return () => {
           if (headingWatcher) headingWatcher.remove();
         };
       } catch (error) {
-        Alert.alert(
-          "Error",
-          `Error fetching location: ${(error as Error).message}`
-        );
+        Alert.alert("Error", `Error fetching location: ${(error as Error).message}`);
       } finally {
         setLoading(false);
       }
@@ -115,11 +96,6 @@ export default function MapScreen() {
       );
     }
   }, [currentLocation, destination]);
-  useEffect(() => {
-    navigation.setOptions({
-      headerTitle: "",
-    });
-  }, []);
 
   // Function to fetch directions from Google Directions API
   const getDirections = async (startLoc: any, destinationLoc: any) => {
@@ -134,9 +110,7 @@ export default function MapScreen() {
         setRouteSteps(steps);
 
         // Decode the route polyline
-        const points = decodePolyline(
-          respJson.routes[0].overview_polyline.points
-        );
+        const points = decodePolyline(respJson.routes[0].overview_polyline.points);
         const coords = points.map((point) => ({
           latitude: point[0],
           longitude: point[1],
@@ -146,28 +120,25 @@ export default function MapScreen() {
         Alert.alert("No Routes Found", "Could not find any routes.");
       }
     } catch (error) {
-      Alert.alert(
-        "Error",
-        `Error fetching directions: ${(error as Error).message}`
-      );
+      Alert.alert("Error", `Error fetching directions: ${(error as Error).message}`);
     }
   };
 
-  // Update map camera when heading changes
-  useEffect(() => {
+  // Function to re-center the map to the current location
+  const handleRecenter = () => {
     if (currentLocation && mapRef) {
       mapRef.animateCamera({
         center: {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
         },
-        // Update heading with the new direction
+        heading: heading, // Update heading with the new direction
         pitch: 90, // Adjust pitch for better 3D view
         altitude: 300,
         zoom: 20,
       });
     }
-  }, [currentLocation]);
+  };
 
   // Utility: Decode polyline from Google API
   const decodePolyline = (encoded: string) => {
@@ -234,13 +205,14 @@ export default function MapScreen() {
         <Marker coordinate={currentLocation} title="Current Location" />
         {destination && <Marker coordinate={destination} title="Destination" />}
         {routeCoordinates.length > 0 && (
-          <Polyline
-            coordinates={routeCoordinates}
-            strokeWidth={5}
-            strokeColor="blue"
-          />
+          <Polyline coordinates={routeCoordinates} strokeWidth={5} strokeColor="blue" />
         )}
       </MapView>
+
+      {/* Re-center Button */}
+      <View style={styles.buttonContainer}>
+        <Button title="Re-center" onPress={handleRecenter} />
+      </View>
     </View>
   );
 }
@@ -258,5 +230,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  buttonContainer: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
   },
 });
