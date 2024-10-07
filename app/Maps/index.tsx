@@ -9,7 +9,7 @@ const ASPECT_RATIO = width / height;
 const LATITUDE_DELTA = 0.00922; // Closer zoom level
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 
-const GOOGLE_MAPS_APIKEY = "AIzaSyDtIV_60HVteiogrQRSPDgVlWIRFFaiK3o";
+const GOOGLE_MAPS_APIKEY = API_KEY;
 
 export default function MapScreen() {
   interface Location {
