@@ -175,8 +175,7 @@ const LoginScreen = () => {
               width: "100%",
             }}
           >
-            Enter your College id,"99x901",or for staff , it is the e-mail
-            prefix nmae - like "xyyz.eee"
+            Enter you username
           </Text>
           <View
             style={[
@@ -210,8 +209,7 @@ const LoginScreen = () => {
               width: "100%",
             }}
           >
-            Enter your password. If you forgot your password,click "Forgot
-            Password"
+            Enter your password
           </Text>
           <View
             style={[

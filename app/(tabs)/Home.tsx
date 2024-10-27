@@ -12,12 +12,14 @@ import {
 import * as Speech from "expo-speech";
 import { Button, IconButton, useTheme, Appbar } from "react-native-paper";
 import axios from "axios";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import HTMLView from "react-native-htmlview";
 import * as Location from "expo-location";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CommonActions } from "@react-navigation/native";
+
 const SmartAssistantScreen = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -34,6 +36,7 @@ const SmartAssistantScreen = () => {
   const FlatListref = useRef<FlatList<any>>(null);
   const [isSpeaking, setIsSpeaking] = useState(false); // New state for tracking speech
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const styles = createStyles(isDarkTheme);
 
   useEffect(() => {
@@ -320,6 +323,13 @@ const SmartAssistantScreen = () => {
         <Appbar.Action
           icon="history"
           onPress={() => router.push("/HistoryScreen")}
+        />
+        <Appbar.Action
+          icon="logout"
+          onPress={async () => {
+            await AsyncStorage.removeItem("admin-token");
+            router.replace("(tabs)");
+          }}
         />
       </Appbar.Header>
 

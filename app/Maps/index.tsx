@@ -16,7 +16,7 @@ const ASPECT_RATIO = width / height;
 const LATITUDE_DELTA = 0.00922; // Closer zoom level
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 
-const GOOGLE_MAPS_APIKEY = "AIzaSyDtIV_60HVteiogrQRSPDgVlWIRFFaiK3o";
+const GOOGLE_MAPS_APIKEY = "AIzaSyAJ8OfsG7YCONJi3oCFlfxB8OPrs3u8bt8";
 
 export default function MapScreen() {
   interface Location {
@@ -70,14 +70,8 @@ export default function MapScreen() {
           Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
           }),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Location request timed out")),
-              10000
-            )
-          ),
         ])) as Location.LocationObject;
-
+        console.log(location);
         if (location) {
           setCurrentLocation({
             latitude: location.coords.latitude,
@@ -161,7 +155,7 @@ export default function MapScreen() {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
         },
-        // Update heading with the new direction
+        heading: 0, // Update heading with the new direction
         pitch: 90, // Adjust pitch for better 3D view
         altitude: 300,
         zoom: 20,
