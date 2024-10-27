@@ -18,6 +18,8 @@ import * as Location from "expo-location";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "expo-router";
+
 const SmartAssistantScreen = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
